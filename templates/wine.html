@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wine Quality — Live Predictor</title>
+<style>
+  :root{
+    --bg:#1a0f1f;
+    --card:#221426;
+    --glass: rgba(255,255,255,0.03);
+    --accent1: #ffb84d; /* gold */
+    --accent2: hwb(19 39% 48%); /* warm orange */
+    --muted:#c8bfbf;
+    --success:#f0d26d;
+    --card-radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; font-family:'Segoe UI', Roboto, Arial, sans-serif;
+    background: linear-gradient(180deg, #140a16 0%, #1a0f1f 100%);
+    color:#f8f5f2; display:flex;align-items:center;justify-content:center;padding:28px;
+  }
+
+  .app {
+    width:1060px; max-width:96%;
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:var(--card-radius); padding:22px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    display:grid; grid-template-columns: 1fr 380px; gap:20px; align-items:start;
+    backdrop-filter: blur(6px);
+  }
+
+  header{grid-column:1/-1; display:flex; gap:14px; align-items:center}
+  .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent1),var(--accent2)); display:flex;align-items:center;justify-content:center;font-weight:800;color:#2a1b00;font-size:20px; box-shadow: 0 6px 20px rgba(255,184,77,0.3);}
+  h1{margin:0;font-size:20px}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+
+  .controls{background:var(--glass); padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.04)}
+  .grid{
+    display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;
+  }
+  .control{
+    padding:10px; border-radius:10px; background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border:1px solid rgba(255,255,255,0.04);
+  }
+  .control .title{font-size:13px;color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center}
+  .control .title strong{font-weight:700;color:#fff3e0}
+  .slider-row{display:flex;gap:10px; align-items:center}
+  input[type="range"]{
+    -webkit-appearance:none; height:8px; border-radius:6px; background: linear-gradient(90deg,#3a243a,#3a243a); width:100%;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:18px;height:18px;border-radius:50%; background:var(--accent1); border:2px solid #332200; box-shadow: 0 4px 10px rgba(255,184,77,0.5);
+  }
+  .bars{margin-top:14px; display:flex; gap:8px; align-items:end; height:140px}
+  .bar{
+    flex:1; border-radius:8px 8px 4px 4px; display:flex; align-items:end; justify-content:center; transition:height 0.18s;
+    background: linear-gradient(180deg,var(--accent1),var(--accent2)); box-shadow: 0 6px 15px rgba(255,184,77,0.4);
+  }
+  .bar small{writing-mode:vertical-rl; transform:rotate(180deg); font-size:11px; color:#2a1b00; font-weight:800;padding-bottom:6px}
+
+  .preview{padding:18px; border-radius:12px; background: linear-gradient(180deg, rgba(42,28,42,0.4), rgba(42,28,42,0.3)); border:1px solid rgba(255,255,255,0.05)}
+  .preview h3{margin:0 0 8px 0}
+  .stat{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; margin-bottom:8px; border-radius:10px; background: rgba(255,255,255,0.02); color:var(--muted)}
+  .stat strong{color:#fff5e1}
+  .predict-box{margin-top:10px; padding:14px; border-radius:10px; background: linear-gradient(90deg, rgba(255,184,77,0.15), rgba(255,153,102,0.1)); text-align:center; font-weight:800; font-size:18px; color:#2a1b00}
+  .note{font-size:12px;color:var(--muted); margin-top:8px}
+
+  footer{grid-column:1/-1; text-align:center; color:var(--muted); font-size:13px; margin-top:8px}
+
+  @media (max-width:980px){
+    .app{grid-template-columns:1fr; padding:14px}
+    .grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">🍷</div>
+    <div>
+      <h1>Wine Quality — Live Prediction</h1>
+      <p class="lead">Adjust the sliders and see the quality prediction instantly</p>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="grid" id="sliders-container">
+      <!-- Sliders will be injected by JS -->
+    </div>
+    <div class="bars" id="bars-container">
+      <!-- Bars will be injected by JS -->
+    </div>
+  </div>
+
+  <div class="preview">
+    <h3>Prediction</h3>
+    <div class="stat"><span>Predicted Quality</span> <strong id="pred-quality">-</strong></div>
+    <div class="predict-box" id="pred-box">Adjust sliders to start</div>
+    <p class="note">Values are scaled using your trained StandardScaler and sent to Flask backend for prediction.</p>
+  </div>
+
+  <footer>Wine Quality ML App — Dark Grape & Gold Theme</footer>
+</div>
+
+<script>
+const features = [
+  { name: "fixed_acidity", label: "Fixed Acidity", min: 4, max: 16, step: 0.1, value: 8 },
+  { name: "volatile_acidity", label: "Volatile Acidity", min: 0, max: 2, step: 0.01, value: 0.5 },
+  { name: "citric_acid", label: "Citric Acid", min: 0, max: 1, step: 0.01, value: 0.3 },
+  { name: "residual_sugar", label: "Residual Sugar", min: 0, max: 15, step: 0.1, value: 2 },
+  { name: "chlorides", label: "Chlorides", min: 0, max: 0.2, step: 0.001, value: 0.05 },
+  { name: "free_sulfur_dioxide", label: "Free SO₂", min: 0, max: 100, step: 1, value: 30 },
+  { name: "total_sulfur_dioxide", label: "Total SO₂", min: 0, max: 300, step: 1, value: 115 },
+  { name: "density", label: "Density", min: 0.990, max: 1.005, step: 0.0001, value: 0.996 },
+  { name: "pH", label: "pH", min: 2.5, max: 4.5, step: 0.01, value: 3.3 },
+  { name: "sulphates", label: "Sulphates", min: 0, max: 2, step: 0.01, value: 0.6 },
+  { name: "alcohol", label: "Alcohol", min: 8, max: 15, step: 0.1, value: 10 }
+];
+
+const slidersContainer = document.getElementById("sliders-container");
+const barsContainer = document.getElementById("bars-container");
+
+features.forEach(f => {
+  const div = document.createElement("div");
+  div.className = "control";
+  div.innerHTML = `
+    <div class="title"><span>${f.label}</span> <strong id="${f.name}-val">${f.value}</strong></div>
+    <div class="slider-row">
+      <input type="range" id="${f.name}" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.value}">
+    </div>
+  `;
+  slidersContainer.appendChild(div);
+
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.style.height = ((f.value - f.min) / (f.max - f.min) * 100) + "%";
+  bar.innerHTML = `<small>${f.label}</small>`;
+  barsContainer.appendChild(bar);
+
+  document.getElementById(f.name).addEventListener("input", e => {
+    document.getElementById(`${f.name}-val`).innerText = e.target.value;
+    bar.style.height = ((e.target.value - f.min) / (f.max - f.min) * 100) + "%";
+    sendPrediction();
+  });
+});
+
+async function sendPrediction(){
+  const data = {};
+  features.forEach(f => {
+    data[f.name] = parseFloat(document.getElementById(f.name).value);
+  });
+
+  try {
+    const res = await fetch("/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const out = await res.json();
+    if(out.predicted_quality !== undefined){
+      document.getElementById("pred-quality").innerText = out.predicted_quality.toFixed(2);
+      document.getElementById("pred-box").innerText = "Quality Score: " + out.predicted_quality.toFixed(2);
+    } else {
+      document.getElementById("pred-box").innerText = "Error: " + out.error;
+    }
+  } catch(err){
+    document.getElementById("pred-box").innerText = "Error connecting to server";
+  }
+}
+
+sendPrediction();
+</script>
+</body>
+</html>
